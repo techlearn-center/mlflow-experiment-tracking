@@ -1,10 +1,10 @@
-# Module 04: Model Registry and Versioning
+# Module 04: MLflow Projects - Reproducible ML Code Packaging
 
 | | |
 |---|---|
 | **Time** | 3-5 hours |
 | **Difficulty** | Intermediate |
-| **Prerequisites** | Module 03 completed |
+| **Prerequisites** | Module 03 completed, Docker installed |
 
 ---
 
@@ -12,116 +12,335 @@
 
 By the end of this module, you will be able to:
 
-- Understand the core concepts of Model Registry and Versioning
-- Set up and configure the required tools and environments
-- Complete hands-on exercises that demonstrate practical skills
-- Apply these skills in real-world scenarios
-- Pass the module validation to prove your understanding
+- Create an MLproject file to define reproducible ML workflows
+- Configure conda and Docker environments for MLflow Projects
+- Run MLflow Projects locally and from Git repositories
+- Pass parameters to project entry points
+- Chain multiple project steps into multi-step workflows
+- Understand how Projects enable reproducibility across teams
 
 ---
 
 ## Concepts
 
-### What is Model Registry and Versioning?
+### What is an MLflow Project?
 
-Model Registry and Versioning is a fundamental component of MLflow Experiment Tracking: Zero to Hero. In production environments, this skill is used daily by engineers to build, deploy, and maintain reliable systems.
+An MLflow Project is a convention for packaging ML code so anyone can reproduce your results. A project is simply a directory (or Git repo) with an `MLproject` file that specifies:
 
-**Real-world analogy:** Think of Model Registry and Versioning like learning to read a map before navigating a city. Once you understand the fundamentals, you can find your way through any complex system.
+1. **Name** -- Project identifier
+2. **Environment** -- How to set up dependencies (conda, Docker, or system)
+3. **Entry points** -- Commands to run with typed parameters
 
-### Why Does This Matter?
+### The MLproject File
 
-Companies like Google, Netflix, Amazon, and Meta rely on these practices to:
-- Deploy thousands of times per day
-- Maintain 99.99% uptime
-- Scale to millions of users
-- Recover from failures in minutes
+```yaml
+name: wine-classifier
 
-### Key Terminology
+# Option 1: Conda environment
+conda_env: conda.yaml
 
-| Term | Definition |
+# Option 2: Docker environment
+# docker_env:
+#   image: my-ml-image:latest
+#   volumes: ["/data:/data"]
+
+entry_points:
+  main:
+    parameters:
+      n_estimators: {type: int, default: 100}
+      max_depth: {type: int, default: 5}
+      test_size: {type: float, default: 0.2}
+    command: "python train.py --n-estimators {n_estimators} --max-depth {max_depth} --test-size {test_size}"
+
+  evaluate:
+    parameters:
+      run_id: {type: string}
+    command: "python evaluate.py --run-id {run_id}"
+```
+
+### Why Projects Matter
+
+| Without Projects | With Projects |
 |---|---|
-| **Core concept 1** | The foundational building block of this module |
-| **Core concept 2** | How components interact and communicate |
-| **Core concept 3** | The pattern used for reliability and scale |
-| **Best practice** | The industry-standard approach to implementation |
+| "It works on my machine" | Reproducible on any machine |
+| Manual dependency management | Environment auto-created |
+| Undocumented parameters | Typed, documented parameters with defaults |
+| One-off scripts | Reusable, shareable workflows |
 
 ---
 
 ## Hands-On Lab
 
-### Prerequisites Check
+### Exercise 1: Create Your First MLflow Project
 
-Before starting, verify your environment:
+**Goal:** Build a complete ML project with an MLproject file.
+
+**Step 1:** Create the project directory structure.
 
 ```bash
-# Check Docker is running
-docker --version
-docker compose version
-
-# Check you have the project cloned
-ls modules/04-model-registry/
+mkdir -p mlflow-wine-project
+cd mlflow-wine-project
 ```
 
-### Exercise 1: Setup and Configuration
+**Step 2:** Create `conda.yaml`.
 
-**Goal:** Get the foundation in place for this module.
+```yaml
+# conda.yaml
+name: wine-classifier-env
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+      - mlflow>=2.12.0
+      - scikit-learn>=1.4.0
+      - pandas>=2.2.0
+      - numpy>=1.26.0
+      - matplotlib>=3.8.0
+```
 
-**Step 1:** Review the starter files
+**Step 3:** Create `MLproject`.
+
+```yaml
+# MLproject
+name: wine-classifier
+
+conda_env: conda.yaml
+
+entry_points:
+  main:
+    parameters:
+      n_estimators: {type: int, default: 100}
+      max_depth: {type: int, default: 5}
+      learning_rate: {type: float, default: 0.1}
+      data_path: {type: string, default: "default"}
+    command: >
+      python train.py
+      --n-estimators {n_estimators}
+      --max-depth {max_depth}
+      --learning-rate {learning_rate}
+      --data-path {data_path}
+
+  evaluate:
+    parameters:
+      model_uri: {type: string}
+    command: "python evaluate.py --model-uri {model_uri}"
+
+  preprocess:
+    command: "python preprocess.py"
+```
+
+**Step 4:** Create `train.py`.
+
+```python
+# train.py
+import argparse
+
+import mlflow
+import mlflow.sklearn
+from mlflow.models.signature import infer_signature
+from sklearn.datasets import load_wine
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.metrics import accuracy_score, f1_score
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--n-estimators", type=int, default=100)
+    parser.add_argument("--max-depth", type=int, default=5)
+    parser.add_argument("--learning-rate", type=float, default=0.1)
+    parser.add_argument("--data-path", type=str, default="default")
+    args = parser.parse_args()
+
+    wine = load_wine()
+    X_train, X_test, y_train, y_test = train_test_split(
+        wine.data, wine.target, test_size=0.2, random_state=42
+    )
+
+    scaler = StandardScaler()
+    X_train_s = scaler.fit_transform(X_train)
+    X_test_s = scaler.transform(X_test)
+
+    with mlflow.start_run():
+        mlflow.log_params({
+            "n_estimators": args.n_estimators,
+            "max_depth": args.max_depth,
+            "learning_rate": args.learning_rate,
+        })
+
+        model = GradientBoostingClassifier(
+            n_estimators=args.n_estimators,
+            max_depth=args.max_depth,
+            learning_rate=args.learning_rate,
+            random_state=42,
+        )
+        model.fit(X_train_s, y_train)
+        y_pred = model.predict(X_test_s)
+
+        accuracy = accuracy_score(y_test, y_pred)
+        f1 = f1_score(y_test, y_pred, average="weighted")
+        mlflow.log_metrics({"accuracy": accuracy, "f1_score": f1})
+
+        signature = infer_signature(X_test_s, y_pred)
+        mlflow.sklearn.log_model(model, "model", signature=signature)
+
+        print(f"Accuracy: {accuracy:.4f}, F1: {f1:.4f}")
+
+
+if __name__ == "__main__":
+    main()
+```
+
+**Step 5:** Run the project.
+
 ```bash
-ls modules/04-model-registry/lab/starter/
+# Run with default parameters
+mlflow run . --experiment-name "04-mlflow-projects"
+
+# Run with custom parameters
+mlflow run . -P n_estimators=200 -P max_depth=7 -P learning_rate=0.05
+
+# Run a specific entry point
+mlflow run . -e preprocess
 ```
 
-**Step 2:** Set up the required environment
+### Exercise 2: Run Projects from Git
+
+**Goal:** Run an MLflow Project directly from a Git repository.
+
 ```bash
-# Follow the specific setup for this module
-# Each command is explained below
-cd modules/04-model-registry/lab/starter/
+# Run any public MLflow project from GitHub
+mlflow run https://github.com/mlflow/mlflow-example -P alpha=0.5
+
+# Run with specific branch or commit
+mlflow run https://github.com/mlflow/mlflow-example --version main -P alpha=0.3
 ```
 
-**Step 3:** Verify the setup
+```python
+# Run projects programmatically
+import mlflow
+
+submitted_run = mlflow.projects.run(
+    uri="https://github.com/mlflow/mlflow-example",
+    parameters={"alpha": 0.5},
+    experiment_name="04-git-projects",
+    synchronous=True,
+)
+
+print(f"Run ID: {submitted_run.run_id}")
+print(f"Status: {submitted_run.get_status()}")
+```
+
+### Exercise 3: Docker-Based Projects
+
+**Goal:** Use Docker instead of conda for perfectly reproducible environments.
+
+```dockerfile
+# Dockerfile.project
+FROM python:3.11-slim
+
+RUN pip install mlflow scikit-learn pandas numpy matplotlib
+
+WORKDIR /app
+COPY . /app
+```
+
+```yaml
+# MLproject (Docker version)
+name: wine-classifier-docker
+
+docker_env:
+  image: wine-classifier:latest
+  volumes:
+    - "${PWD}/data:/app/data"
+  environment:
+    - ["MLFLOW_TRACKING_URI", "http://host.docker.internal:5000"]
+
+entry_points:
+  main:
+    parameters:
+      n_estimators: {type: int, default: 100}
+      max_depth: {type: int, default: 5}
+    command: "python train.py --n-estimators {n_estimators} --max-depth {max_depth}"
+```
+
 ```bash
-# Run the validation to check your setup
-bash modules/04-model-registry/validation/validate.sh
+docker build -f Dockerfile.project -t wine-classifier:latest .
+mlflow run . --experiment-name "04-docker-projects"
 ```
 
-**What you should see:** The validation script will show PASS for setup-related checks.
+### Exercise 4: Multi-Step Workflows
 
-### Exercise 2: Core Implementation
+**Goal:** Chain multiple project steps together.
 
-**Goal:** Implement the main concept of this module.
+```python
+# workflow.py
+"""
+Multi-step workflow:
+1. Preprocess data
+2. Train model with different hyperparameters
+3. Evaluate the best model
+"""
+import mlflow
 
-Follow the detailed instructions in the starter directory. The solution directory contains the reference implementation if you get stuck.
+EXPERIMENT_NAME = "04-multi-step-workflow"
 
-**Key points:**
-- Read each instruction carefully before executing
-- Understand WHY each step is needed, not just WHAT to do
-- If something fails, check the troubleshooting section below
 
-### Exercise 3: Integration and Testing
+def run_workflow():
+    mlflow.set_experiment(EXPERIMENT_NAME)
 
-**Goal:** Connect this module's work with the broader system.
+    with mlflow.start_run(run_name="full-pipeline") as parent_run:
+        # Step 1: Preprocess
+        print("Step 1: Preprocessing...")
+        preprocess_run = mlflow.projects.run(
+            uri=".",
+            entry_point="preprocess",
+            experiment_name=EXPERIMENT_NAME,
+            synchronous=True,
+        )
 
-- Verify your implementation works with previous modules
-- Run all tests and validation scripts
-- Document what you learned
+        # Step 2: Train with different configs
+        configs = [
+            {"n_estimators": "50", "max_depth": "3", "learning_rate": "0.1"},
+            {"n_estimators": "100", "max_depth": "5", "learning_rate": "0.05"},
+            {"n_estimators": "200", "max_depth": "7", "learning_rate": "0.01"},
+        ]
 
----
+        best_run_id = None
+        best_metric = 0
 
-## Starter Files
+        for i, config in enumerate(configs):
+            print(f"Step 2.{i + 1}: Training with {config}...")
+            train_run = mlflow.projects.run(
+                uri=".",
+                entry_point="main",
+                parameters=config,
+                experiment_name=EXPERIMENT_NAME,
+                synchronous=True,
+            )
 
-Check `lab/starter/` for:
-- Configuration templates to fill in
-- Skeleton code to complete
-- Setup scripts to run
+            client = mlflow.tracking.MlflowClient()
+            run_data = client.get_run(train_run.run_id)
+            accuracy = run_data.data.metrics.get("accuracy", 0)
 
-## Solution Files
+            if accuracy > best_metric:
+                best_metric = accuracy
+                best_run_id = train_run.run_id
 
-If you get stuck, `lab/solution/` contains:
-- Complete working configuration
-- Fully implemented code
-- Expected output examples
+        # Step 3: Log the best result
+        mlflow.log_param("best_run_id", best_run_id)
+        mlflow.log_metric("best_accuracy", best_metric)
 
-> **Important:** Try to complete the exercises yourself first! Looking at solutions too early reduces learning.
+        print(f"Pipeline complete. Best accuracy: {best_metric:.4f}")
+
+
+if __name__ == "__main__":
+    run_workflow()
+```
 
 ---
 
@@ -129,57 +348,32 @@ If you get stuck, `lab/solution/` contains:
 
 | Mistake | Symptom | Fix |
 |---|---|---|
-| Skipping prerequisites | Module exercises fail | Complete previous modules first |
-| Copy-pasting without understanding | Cannot troubleshoot issues | Read explanations, not just commands |
-| Not checking validation | Think you are done but are not | Run validate.sh after each exercise |
-| Ignoring error messages | Problems compound | Read errors carefully, they tell you what is wrong |
+| Missing `MLproject` file | `mlflow.exceptions.ExecutionException` | Create MLproject in the project root |
+| Conda env creation fails | Dependency resolution errors | Pin versions in conda.yaml; consider Docker |
+| Wrong parameter types | `TypeError` during project run | Match types in MLproject (int, float, string) |
+| Docker not finding tracking server | Connection refused from container | Use `host.docker.internal` or a network bridge |
 
 ---
 
 ## Self-Check Questions
 
-Test your understanding before moving on:
-
-1. What is the main purpose of Model Registry and Versioning?
-2. How does this connect to the previous module?
-3. What would happen in production without this?
-4. Can you explain this concept to a non-technical person?
-5. What are three things that could go wrong, and how would you fix them?
+1. What are the three environment options for MLflow Projects?
+2. How do you pass parameters when running a project from the CLI?
+3. What is the benefit of running a project from a Git URI?
+4. When would you choose Docker over conda for a project environment?
+5. How do multi-step workflows help with complex ML pipelines?
 
 ---
 
 ## You Know You Have Completed This Module When...
 
-- [ ] All exercises completed
+- [ ] You created an MLproject file with parameters and entry points
+- [ ] You ran a project locally with custom parameters
+- [ ] You ran a project from a Git repository
+- [ ] You understand conda vs Docker trade-offs
+- [ ] You built a multi-step workflow
 - [ ] Validation script passes: `bash modules/04-model-registry/validation/validate.sh`
-- [ ] You can explain the concepts without looking at notes
-- [ ] You understand how this applies to real-world scenarios
-- [ ] Self-check questions answered confidently
 
 ---
 
-## Troubleshooting
-
-### Common Issues
-
-**Issue: Validation script fails**
-- Re-read the exercise instructions
-- Check that Docker containers are running
-- Verify you are in the correct directory
-- Compare your work with the solution files
-
-**Issue: Docker container not starting**
-```bash
-docker compose logs <service-name>  # Check logs
-docker compose down && docker compose up -d  # Restart
-```
-
-**Issue: Permission denied**
-```bash
-chmod +x validation/validate.sh  # Make script executable
-sudo chown -R $USER .           # Fix ownership (Linux)
-```
-
----
-
-**Next: [Module 05 →](../05-model-packaging/)**
+**Next: [Module 05 - Model Packaging and Signatures -->](../05-model-packaging/)**

@@ -1,0 +1,43 @@
+# MLflow Experiment Tracking - Dependencies
+# ==========================================
+
+# Core ML lifecycle management
+mlflow>=2.12.0
+
+# Machine learning frameworks
+scikit-learn>=1.4.0
+xgboost>=2.0.0
+torch>=2.2.0
+
+# Data processing
+pandas>=2.2.0
+numpy>=1.26.0
+
+# Visualization
+matplotlib>=3.8.0
+seaborn>=0.13.0
+
+# Model serving
+fastapi>=0.110.0
+uvicorn>=0.29.0
+pydantic>=2.6.0
+
+# Cloud and storage
+boto3>=1.34.0
+
+# Configuration
+python-dotenv>=1.0.0
+
+# Hyperparameter tuning (Module 08)
+optuna>=3.5.0
+
+# Monitoring utilities
+scipy>=1.12.0
+evidently>=0.4.0
+
+# Database drivers (for production tracking server)
+psycopg2-binary>=2.9.0
+
+# Testing
+pytest>=8.0.0
+httpx>=0.27.0

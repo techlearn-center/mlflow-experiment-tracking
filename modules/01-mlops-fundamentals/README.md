@@ -1,10 +1,10 @@
-# Module 01: MLOps Fundamentals
+# Module 01: MLOps Fundamentals - MLflow Installation and Tracking Server Setup
 
 | | |
 |---|---|
 | **Time** | 3-5 hours |
 | **Difficulty** | Beginner |
-| **Prerequisites** | Docker installed, basic terminal knowledge |
+| **Prerequisites** | Python 3.9+, pip, Docker installed, basic terminal knowledge |
 
 ---
 
@@ -12,116 +12,253 @@
 
 By the end of this module, you will be able to:
 
-- Understand the core concepts of MLOps Fundamentals
-- Set up and configure the required tools and environments
-- Complete hands-on exercises that demonstrate practical skills
-- Apply these skills in real-world scenarios
-- Pass the module validation to prove your understanding
+- Explain what MLOps is and why it matters for production ML systems
+- Install MLflow and verify all components work correctly
+- Launch a local MLflow tracking server and navigate the UI
+- Understand the difference between local file tracking and a tracking server
+- Configure environment variables for MLflow connectivity
 
 ---
 
 ## Concepts
 
-### What is MLOps Fundamentals?
+### What is MLOps?
 
-MLOps Fundamentals is a fundamental component of MLflow Experiment Tracking: Zero to Hero. In production environments, this skill is used daily by engineers to build, deploy, and maintain reliable systems.
+MLOps (Machine Learning Operations) is the set of practices that combines ML development with operations to reliably deploy and maintain ML systems in production. Just as DevOps transformed software delivery, MLOps transforms how organizations build, deploy, and monitor ML models.
 
-**Real-world analogy:** Think of MLOps Fundamentals like learning to read a map before navigating a city. Once you understand the fundamentals, you can find your way through any complex system.
+**The ML lifecycle without MLOps:**
+1. Data scientist trains model in a notebook
+2. "Best" model parameters live in someone's memory or a sticky note
+3. Deployment is a manual, error-prone copy-paste to production
+4. No one knows which model is in production or how it performs
 
-### Why Does This Matter?
+**The ML lifecycle with MLOps:**
+1. Every training run is tracked with parameters, metrics, and artifacts
+2. Models are versioned in a registry with clear lineage
+3. Deployment is automated with rollback capability
+4. Performance is continuously monitored with drift detection
 
-Companies like Google, Netflix, Amazon, and Meta rely on these practices to:
-- Deploy thousands of times per day
-- Maintain 99.99% uptime
-- Scale to millions of users
-- Recover from failures in minutes
+### Where MLflow Fits
+
+MLflow is an open-source platform that addresses four key pillars of the ML lifecycle:
+
+| Component | Purpose | Module Coverage |
+|---|---|---|
+| **MLflow Tracking** | Log parameters, metrics, artifacts | Modules 02-03 |
+| **MLflow Projects** | Package ML code for reproducibility | Module 05 |
+| **MLflow Models** | Standard format for model packaging | Modules 04-06 |
+| **MLflow Registry** | Centralized model store with versioning | Module 04 |
 
 ### Key Terminology
 
 | Term | Definition |
 |---|---|
-| **Core concept 1** | The foundational building block of this module |
-| **Core concept 2** | How components interact and communicate |
-| **Core concept 3** | The pattern used for reliability and scale |
-| **Best practice** | The industry-standard approach to implementation |
+| **Experiment** | A named group of related runs (e.g., "fraud-detection-v2") |
+| **Run** | A single execution of ML code that logs params, metrics, artifacts |
+| **Artifact** | Any file output from a run (model files, plots, data samples) |
+| **Tracking URI** | The address of the MLflow tracking server |
+| **Backend Store** | Database storing run metadata (SQLite, PostgreSQL, MySQL) |
+| **Artifact Store** | File system or object store for artifacts (local, S3, GCS, Azure Blob) |
 
 ---
 
 ## Hands-On Lab
 
-### Prerequisites Check
+### Exercise 1: Install MLflow and Verify
 
-Before starting, verify your environment:
+**Goal:** Get MLflow installed and confirm all components work.
+
+**Step 1:** Create a virtual environment and install dependencies.
 
 ```bash
-# Check Docker is running
-docker --version
-docker compose version
+python -m venv mlflow-env
+source mlflow-env/bin/activate  # Linux/Mac
+# mlflow-env\Scripts\activate   # Windows
 
-# Check you have the project cloned
-ls modules/01-mlops-fundamentals/
+pip install mlflow scikit-learn pandas numpy matplotlib
 ```
 
-### Exercise 1: Setup and Configuration
+**Step 2:** Verify the installation.
 
-**Goal:** Get the foundation in place for this module.
-
-**Step 1:** Review the starter files
 ```bash
-ls modules/01-mlops-fundamentals/lab/starter/
+mlflow --version
+# Expected: mlflow, version 2.x.x
+
+python -c "import mlflow; print(mlflow.__version__)"
 ```
 
-**Step 2:** Set up the required environment
+**Step 3:** Run your first tracking test.
+
+```python
+# test_mlflow_install.py
+import mlflow
+
+# This uses a local ./mlruns directory by default
+mlflow.set_experiment("installation-test")
+
+with mlflow.start_run(run_name="hello-mlflow"):
+    mlflow.log_param("framework", "test")
+    mlflow.log_metric("score", 0.95)
+    mlflow.log_metric("loss", 0.05)
+    print(f"Run ID: {mlflow.active_run().info.run_id}")
+    print(f"Artifact URI: {mlflow.active_run().info.artifact_uri}")
+
+print("MLflow installation verified successfully!")
+```
+
 ```bash
-# Follow the specific setup for this module
-# Each command is explained below
-cd modules/01-mlops-fundamentals/lab/starter/
+python test_mlflow_install.py
 ```
 
-**Step 3:** Verify the setup
+**What you should see:** A run ID printed, and a new `mlruns/` directory created.
+
+### Exercise 2: Launch the MLflow Tracking Server
+
+**Goal:** Start a local tracking server and explore the UI.
+
+**Option A: Simple local server (file-based)**
+
 ```bash
-# Run the validation to check your setup
-bash modules/01-mlops-fundamentals/validation/validate.sh
+mlflow server --host 0.0.0.0 --port 5000
 ```
 
-**What you should see:** The validation script will show PASS for setup-related checks.
+This starts a server backed by the local `./mlruns` directory. Open `http://localhost:5000` in your browser.
 
-### Exercise 2: Core Implementation
+**Option B: Server with SQLite backend (recommended for learning)**
 
-**Goal:** Implement the main concept of this module.
+```bash
+mlflow server \
+  --host 0.0.0.0 \
+  --port 5000 \
+  --backend-store-uri sqlite:///mlflow.db \
+  --default-artifact-root ./mlruns
+```
 
-Follow the detailed instructions in the starter directory. The solution directory contains the reference implementation if you get stuck.
+This uses SQLite for metadata, which enables the Model Registry features.
 
-**Key points:**
-- Read each instruction carefully before executing
-- Understand WHY each step is needed, not just WHAT to do
-- If something fails, check the troubleshooting section below
+**Option C: Full production stack with Docker Compose**
 
-### Exercise 3: Integration and Testing
+```bash
+# From the repo root
+cp .env.example .env
+docker compose up -d
 
-**Goal:** Connect this module's work with the broader system.
+# Verify all services are running
+docker compose ps
+```
 
-- Verify your implementation works with previous modules
-- Run all tests and validation scripts
-- Document what you learned
+This starts PostgreSQL (metadata), MinIO (artifacts), and the MLflow server.
+
+**Step 2:** Explore the UI at `http://localhost:5000`:
+- Click on the "installation-test" experiment
+- View the run you created in Exercise 1
+- Examine the parameters and metrics tabs
+- Note the artifact storage path
+
+### Exercise 3: Connect a Script to the Tracking Server
+
+**Goal:** Configure a Python script to log to the tracking server instead of local files.
+
+```python
+# connect_to_server.py
+import mlflow
+import numpy as np
+
+# Point to the tracking server
+mlflow.set_tracking_uri("http://localhost:5000")
+
+# Verify connection
+print(f"Tracking URI: {mlflow.get_tracking_uri()}")
+
+# Create an experiment
+mlflow.set_experiment("server-connection-test")
+
+with mlflow.start_run(run_name="remote-logging-test"):
+    # Log various parameter types
+    mlflow.log_param("algorithm", "random_forest")
+    mlflow.log_param("n_estimators", 100)
+    mlflow.log_param("max_depth", 5)
+
+    # Log metrics over multiple steps (simulating training epochs)
+    for epoch in range(10):
+        loss = 1.0 / (epoch + 1) + np.random.normal(0, 0.01)
+        accuracy = 1.0 - loss + np.random.normal(0, 0.005)
+        mlflow.log_metrics(
+            {"training_loss": loss, "training_accuracy": accuracy},
+            step=epoch,
+        )
+
+    # Log a text artifact
+    with open("notes.txt", "w") as f:
+        f.write("This run tests server connectivity.\n")
+    mlflow.log_artifact("notes.txt")
+
+    print("Run logged to tracking server successfully!")
+```
+
+```bash
+python connect_to_server.py
+```
+
+Now refresh the MLflow UI and find the new experiment and run.
+
+### Exercise 4: Environment Variable Configuration
+
+**Goal:** Use environment variables so you never hardcode the tracking URI.
+
+```bash
+# Set the environment variable
+export MLFLOW_TRACKING_URI=http://localhost:5000
+
+# Now any MLflow call will use this URI automatically
+python -c "
+import mlflow
+print(f'Tracking URI: {mlflow.get_tracking_uri()}')
+mlflow.set_experiment('env-var-test')
+with mlflow.start_run():
+    mlflow.log_param('configured_via', 'environment_variable')
+    print('Logged via env var configuration!')
+"
+```
+
+Create a `.env` file for your projects:
+
+```bash
+# .env
+MLFLOW_TRACKING_URI=http://localhost:5000
+MLFLOW_EXPERIMENT_NAME=my-project
+```
+
+Load it in Python:
+
+```python
+from dotenv import load_dotenv
+load_dotenv()
+
+import mlflow
+# mlflow.get_tracking_uri() will now return http://localhost:5000
+```
 
 ---
 
-## Starter Files
+## Architecture Overview
 
-Check `lab/starter/` for:
-- Configuration templates to fill in
-- Skeleton code to complete
-- Setup scripts to run
+```
++------------------+     +-------------------+     +------------------+
+|  Python Script   | --> | MLflow Tracking   | --> | Backend Store    |
+|  (your ML code)  |     | Server (port 5000)|     | (SQLite/Postgres)|
++------------------+     +-------------------+     +------------------+
+                                |
+                                v
+                         +------------------+
+                         | Artifact Store   |
+                         | (local/S3/MinIO) |
+                         +------------------+
+```
 
-## Solution Files
-
-If you get stuck, `lab/solution/` contains:
-- Complete working configuration
-- Fully implemented code
-- Expected output examples
-
-> **Important:** Try to complete the exercises yourself first! Looking at solutions too early reduces learning.
+- **Backend Store** holds run metadata (parameters, metrics, tags, run status)
+- **Artifact Store** holds large files (models, plots, datasets)
+- The Tracking Server provides a REST API and a web UI
 
 ---
 
@@ -129,57 +266,58 @@ If you get stuck, `lab/solution/` contains:
 
 | Mistake | Symptom | Fix |
 |---|---|---|
-| Skipping prerequisites | Module exercises fail | Complete previous modules first |
-| Copy-pasting without understanding | Cannot troubleshoot issues | Read explanations, not just commands |
-| Not checking validation | Think you are done but are not | Run validate.sh after each exercise |
-| Ignoring error messages | Problems compound | Read errors carefully, they tell you what is wrong |
+| Not setting tracking URI | Runs saved to local `./mlruns` instead of server | Set `MLFLOW_TRACKING_URI` env var or call `mlflow.set_tracking_uri()` |
+| Port conflict on 5000 | "Address already in use" error | Kill existing process or use `--port 5001` |
+| SQLite backend without `sqlite:///` prefix | Backend store error on startup | Use three slashes: `sqlite:///mlflow.db` |
+| Forgetting to activate venv | `mlflow: command not found` | Run `source mlflow-env/bin/activate` |
 
 ---
 
 ## Self-Check Questions
 
-Test your understanding before moving on:
-
-1. What is the main purpose of MLOps Fundamentals?
-2. How does this connect to the previous module?
-3. What would happen in production without this?
-4. Can you explain this concept to a non-technical person?
-5. What are three things that could go wrong, and how would you fix them?
+1. What are the four components of MLflow and what does each do?
+2. What is the difference between the backend store and the artifact store?
+3. Why would you use PostgreSQL instead of SQLite as a backend store?
+4. How does setting `MLFLOW_TRACKING_URI` change where runs are logged?
+5. What happens if the tracking server goes down while a training script is running?
 
 ---
 
 ## You Know You Have Completed This Module When...
 
-- [ ] All exercises completed
-- [ ] Validation script passes: `bash modules/01-mlops-fundamentals/validation/validate.sh`
-- [ ] You can explain the concepts without looking at notes
-- [ ] You understand how this applies to real-world scenarios
-- [ ] Self-check questions answered confidently
+- [ ] MLflow is installed and `mlflow --version` works
+- [ ] You can start a tracking server (any of the three options)
+- [ ] You logged a run via a Python script to the tracking server
+- [ ] You can view runs, parameters, and metrics in the MLflow UI
+- [ ] You configured `MLFLOW_TRACKING_URI` as an environment variable
+- [ ] You can explain the MLflow architecture to someone else
 
 ---
 
 ## Troubleshooting
 
-### Common Issues
-
-**Issue: Validation script fails**
-- Re-read the exercise instructions
-- Check that Docker containers are running
-- Verify you are in the correct directory
-- Compare your work with the solution files
-
-**Issue: Docker container not starting**
+### Issue: `mlflow server` fails with database error
 ```bash
-docker compose logs <service-name>  # Check logs
-docker compose down && docker compose up -d  # Restart
+# Reset the SQLite database
+rm mlflow.db
+mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns
 ```
 
-**Issue: Permission denied**
+### Issue: Docker Compose services not starting
 ```bash
-chmod +x validation/validate.sh  # Make script executable
-sudo chown -R $USER .           # Fix ownership (Linux)
+docker compose logs mlflow    # Check MLflow server logs
+docker compose logs postgres  # Check database logs
+docker compose down -v && docker compose up -d  # Full reset
+```
+
+### Issue: Cannot connect from Python script
+```python
+import requests
+# Test connectivity manually
+resp = requests.get("http://localhost:5000/api/2.0/mlflow/experiments/search")
+print(resp.status_code, resp.json())
 ```
 
 ---
 
-**Next: [Module 02 →](../02-mlflow-setup/)**
+**Next: [Module 02 - MLflow Setup and Configuration -->](../02-mlflow-setup/)**
